@@ -33,6 +33,19 @@ async function apiGet<T>(url: string): Promise<T> {
   return res.json();
 }
 
+async function apiPatch<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.json();
+}
+
 const dsid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 function defaultSession(label: string): DeviceSession {
@@ -60,6 +73,9 @@ interface ConfigState {
   loadDeviceTypes: () => Promise<void>;
   loadTemplates: () => Promise<void>;
   loadHistory: () => Promise<void>;
+  loadHistoryWithFilter: (deviceType?: string) => Promise<void>;
+  updateHistoryNote: (id: string, note: string) => Promise<void>;
+  restoreFromHistory: (hid: string, sid: string) => Promise<void>;
 
   addSession: () => void;
   removeSession: (sid: string) => void;
@@ -124,6 +140,52 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     try {
       const data = await apiGet<{ history: HistoryEntry[] }>('/history');
       set({ history: data.history });
+    } catch {
+      // ignore
+    }
+  },
+
+  loadHistoryWithFilter: async (deviceType) => {
+    try {
+      const url = deviceType ? `/history?device_type=${encodeURIComponent(deviceType)}` : '/history';
+      const data = await apiGet<{ history: HistoryEntry[] }>(url);
+      set({ history: data.history });
+    } catch {
+      // ignore
+    }
+  },
+
+  updateHistoryNote: async (id, note) => {
+    try {
+      await apiPatch(`/history/${id}`, { note });
+      set((s) => ({
+        history: s.history.map((h) => (h.id === id ? { ...h, note } : h)),
+      }));
+    } catch {
+      // ignore
+    }
+  },
+
+  restoreFromHistory: async (hid, sid) => {
+    try {
+      const data = await apiGet<FullHistoryEntry>(`/history/${hid}`);
+      set((s) => ({
+        sessions: s.sessions.map((d) =>
+          d.id === sid
+            ? {
+                ...d,
+                deviceType: data.device_type,
+                configBlocks: (data.config_blocks || []).map((b: ConfigBlock) => ({
+                  ...b,
+                  id: dsid(),
+                })),
+                configText: '',
+                warnings: [],
+                templateId: null,
+              }
+            : d
+        ),
+      }));
     } catch {
       // ignore
     }
@@ -245,6 +307,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         warnings: ValidationWarning[];
         history_id: string;
         template_used: string;
+        history_entry: HistoryEntry;
       }>('/generate', {
         device_type: ses.deviceType,
         template_id: ses.templateId,
@@ -262,6 +325,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
               }
             : d
         ),
+        history: [result.history_entry, ...s.history],
       }));
     } catch {
       set((s) => ({

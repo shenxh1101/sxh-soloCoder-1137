@@ -136,7 +136,7 @@ export default function Templates() {
             <div className="flex-1 min-w-0">
               <p className="text-sm text-text-primary truncate">{t.name}</p>
               <p className="text-xs text-text-muted">
-                {t.source === 'builtin' ? deviceName(t.device_type) : '用户上传'} &middot;{' '}
+                {t.device_type ? deviceName(t.device_type) : '通用'} &middot;{' '}
                 {t.source === 'builtin' ? '内置模板' : '自定义'}
               </p>
             </div>

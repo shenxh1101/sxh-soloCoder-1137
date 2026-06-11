@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import DeviceSelector from '@/components/DeviceSelector';
 import ConfigBlockForm from '@/components/ConfigBlockForm';
@@ -17,6 +17,10 @@ import {
   ArrowRightLeft,
   Copy,
   Eye,
+  RotateCcw,
+  Filter,
+  Check,
+  FileText,
 } from 'lucide-react';
 
 const DEVICE_NAME_MAP: Record<string, string> = {
@@ -36,6 +40,9 @@ export default function Home() {
     loadDeviceTypes,
     loadTemplates,
     loadHistory,
+    loadHistoryWithFilter,
+    updateHistoryNote,
+    restoreFromHistory,
     addSession,
     removeSession,
     setActiveSession,
@@ -46,6 +53,13 @@ export default function Home() {
   const [editValue, setEditValue] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyDetail, setHistoryDetail] = useState<FullHistoryEntry | null>(null);
+  const [historyFilter, setHistoryFilter] = useState('');
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteValue, setNoteValue] = useState('');
+  const [templatePreview, setTemplatePreview] = useState<string | null>(null);
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  const sid = activeSession?.id || '';
 
   useEffect(() => {
     loadDeviceTypes();
@@ -53,8 +67,10 @@ export default function Home() {
     loadHistory();
   }, [loadDeviceTypes, loadTemplates, loadHistory]);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
-  const sid = activeSession?.id || '';
+  const openHistory = useCallback(() => {
+    loadHistory();
+    setHistoryOpen(true);
+  }, [loadHistory]);
 
   const handleLabelEdit = (sId: string, label: string) => {
     setEditingLabel(sId);
@@ -66,6 +82,11 @@ export default function Home() {
       renameSession(editingLabel, editValue.trim());
     }
     setEditingLabel(null);
+  };
+
+  const handleFilterChange = (dt: string) => {
+    setHistoryFilter(dt);
+    loadHistoryWithFilter(dt || undefined);
   };
 
   const loadHistoryDetail = async (entry: HistoryEntry) => {
@@ -80,9 +101,38 @@ export default function Home() {
     }
   };
 
+  const handleRestore = async (entry: HistoryEntry) => {
+    await restoreFromHistory(entry.id, sid);
+    setHistoryDetail(null);
+  };
+
+  const handleNoteEdit = (id: string, currentNote: string) => {
+    setEditingNote(id);
+    setNoteValue(currentNote);
+  };
+
+  const handleNoteSave = async () => {
+    if (editingNote) {
+      await updateHistoryNote(editingNote, noteValue);
+    }
+    setEditingNote(null);
+  };
+
   const sendToDiff = (text: string, side: 'old' | 'new') => {
     sessionStorage.setItem(`diff_${side}`, text);
     navigate('/diff');
+  };
+
+  const handleTemplatePreview = async (templateId: string) => {
+    try {
+      const res = await fetch(`/api/templates/${templateId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTemplatePreview(data.content || '');
+      }
+    } catch {
+      setTemplatePreview('无法加载模板内容');
+    }
   };
 
   const filteredTemplates = templates.filter(
@@ -109,9 +159,6 @@ export default function Home() {
               <span className="text-xs font-mono font-bold">
                 {sessions.indexOf(s) + 1}
               </span>
-              {isActive && (
-                <div className="absolute -right-px top-0 bottom-0 w-0.5 bg-accent/30" />
-              )}
             </button>
           );
         })}
@@ -155,7 +202,7 @@ export default function Home() {
               </span>
             )}
             <button
-              onClick={() => setHistoryOpen(!historyOpen)}
+              onClick={openHistory}
               className={`rounded p-1.5 transition-colors ${
                 historyOpen ? 'bg-accent/10 text-accent' : 'text-text-muted hover:text-text-secondary'
               }`}
@@ -179,23 +226,39 @@ export default function Home() {
             <label className="block text-xs font-semibold text-text-muted mb-1.5">
               配置模板
             </label>
-            <select
-              value={activeSession.templateId || ''}
-              onChange={(e) =>
-                useConfigStore.getState().setTemplateId(sid, e.target.value || null)
-              }
-              className="w-full rounded border border-white/10 bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
-            >
-              <option value="">默认内置模板</option>
-              {filteredTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.source === 'user'
-                    ? ` (自定义 · ${DEVICE_NAME_MAP[t.device_type] || t.device_type})`
-                    : ` (内置)`}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-1">
+              <select
+                value={activeSession.templateId || ''}
+                onChange={(e) =>
+                  useConfigStore.getState().setTemplateId(sid, e.target.value || null)
+                }
+                className="flex-1 rounded border border-white/10 bg-background px-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
+              >
+                <option value="">默认内置模板</option>
+                {filteredTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.source === 'user'
+                      ? ` (自定义 · ${DEVICE_NAME_MAP[t.device_type] || t.device_type})`
+                      : ` (内置)`}
+                  </option>
+                ))}
+              </select>
+              {activeSession.templateId && (
+                <button
+                  onClick={() => handleTemplatePreview(activeSession.templateId!)}
+                  className="rounded border border-white/10 px-2 text-text-muted hover:text-accent hover:border-accent/30 transition-colors"
+                  title="预览模板"
+                >
+                  <Eye className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {activeSession.templateId && (
+              <p className="mt-1 text-xs text-accent/60">
+                当前使用: {activeSession.templateId.startsWith('user:') ? '自定义模板' : '内置模板'}
+              </p>
+            )}
           </div>
 
           {/* Device Selector */}
@@ -231,90 +294,197 @@ export default function Home() {
 
       {/* History Drawer */}
       {historyOpen && (
-        <div className="absolute right-0 top-12 bottom-0 z-40 w-80 border-l border-white/10 bg-background/95 backdrop-blur-xl shadow-2xl overflow-y-auto">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/5 bg-background/95 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-accent" />
-              <h3 className="text-sm font-semibold text-text-primary">
-                历史记录 ({history.length})
-              </h3>
+        <div className="absolute right-0 top-12 bottom-0 z-40 w-96 border-l border-white/10 bg-background/95 backdrop-blur-xl shadow-2xl flex flex-col">
+          <div className="shrink-0 border-b border-white/5 bg-background/95 px-4 py-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-accent" />
+                <h3 className="text-sm font-semibold text-text-primary">
+                  历史记录 ({history.length})
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setHistoryOpen(false);
+                  setHistoryDetail(null);
+                }}
+                className="rounded p-1 text-text-muted hover:text-text-primary transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <button
-              onClick={() => {
-                setHistoryOpen(false);
-                setHistoryDetail(null);
-              }}
-              className="rounded p-1 text-text-muted hover:text-text-primary transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            {!historyDetail && (
+              <div className="flex items-center gap-2">
+                <Filter className="h-3.5 w-3.5 text-text-muted" />
+                <select
+                  value={historyFilter}
+                  onChange={(e) => handleFilterChange(e.target.value)}
+                  className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                >
+                  <option value="">全部设备类型</option>
+                  <option value="cisco_router">Cisco 路由器</option>
+                  <option value="huawei_switch">华为交换机</option>
+                  <option value="linux_server">Linux 服务器</option>
+                  <option value="windows_firewall">Windows 防火墙</option>
+                </select>
+              </div>
+            )}
           </div>
 
-          {historyDetail ? (
-            <div className="p-4 space-y-3">
-              <div className="flex items-center gap-2">
+          <div className="flex-1 overflow-y-auto">
+            {historyDetail ? (
+              <div className="p-4 space-y-3">
                 <button
                   onClick={() => setHistoryDetail(null)}
                   className="text-xs text-accent hover:underline"
                 >
                   &larr; 返回列表
                 </button>
+                <div className="flex items-center gap-2 text-xs text-text-muted">
+                  <span className="rounded bg-white/5 px-1.5 py-0.5">
+                    {DEVICE_NAME_MAP[historyDetail.device_type] || historyDetail.device_type}
+                  </span>
+                  <span>{new Date(historyDetail.created_at).toLocaleString()}</span>
+                </div>
+
+                {/* Note editor */}
+                <div className="rounded border border-white/10 bg-surface p-2">
+                  <label className="text-xs text-text-muted">备注</label>
+                  {editingNote === historyDetail.id ? (
+                    <div className="flex gap-1 mt-1">
+                      <input
+                        value={noteValue}
+                        onChange={(e) => setNoteValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleNoteSave()}
+                        autoFocus
+                        className="flex-1 rounded border border-accent bg-background px-2 py-1 text-xs text-text-primary focus:outline-none"
+                      />
+                      <button
+                        onClick={handleNoteSave}
+                        className="rounded bg-accent/20 p-1 text-accent"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="flex-1 text-xs text-text-secondary">
+                        {historyDetail.note || '点击编辑添加备注...'}
+                      </span>
+                      <button
+                        onClick={() => handleNoteEdit(historyDetail.id, historyDetail.note || '')}
+                        className="text-text-muted hover:text-accent"
+                      >
+                        <PenLine className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <pre className="rounded border border-white/10 bg-surface p-3 text-xs font-mono text-text-primary max-h-64 overflow-auto whitespace-pre-wrap">
+                  {historyDetail.config_text}
+                </pre>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleRestore(historyDetail)}
+                    className="flex items-center gap-1 rounded bg-accent/20 px-2 py-1.5 text-xs text-accent hover:bg-accent/30 transition-colors"
+                  >
+                    <RotateCcw className="h-3 w-3" /> 恢复到当前设备
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(historyDetail.config_text);
+                    }}
+                    className="flex items-center gap-1 rounded border border-white/10 px-2 py-1.5 text-xs text-text-secondary hover:text-accent transition-colors"
+                  >
+                    <Copy className="h-3 w-3" /> 复制
+                  </button>
+                  <button
+                    onClick={() => sendToDiff(historyDetail.config_text, 'old')}
+                    className="flex items-center gap-1 rounded border border-white/10 px-2 py-1.5 text-xs text-text-secondary hover:text-accent transition-colors"
+                  >
+                    <ArrowRightLeft className="h-3 w-3" /> 作为旧版本
+                  </button>
+                  <button
+                    onClick={() => sendToDiff(historyDetail.config_text, 'new')}
+                    className="flex items-center gap-1 rounded border border-white/10 px-2 py-1.5 text-xs text-text-secondary hover:text-accent transition-colors"
+                  >
+                    <ArrowRightLeft className="h-3 w-3" /> 作为新版本
+                  </button>
+                </div>
               </div>
-              <div className="text-xs text-text-muted">
-                {DEVICE_NAME_MAP[historyDetail.device_type] || historyDetail.device_type}
-                &middot; {new Date(historyDetail.created_at).toLocaleString()}
-              </div>
-              <pre className="rounded border border-white/10 bg-surface p-3 text-xs font-mono text-text-primary max-h-80 overflow-auto whitespace-pre-wrap">
-                {historyDetail.config_text}
-              </pre>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(historyDetail.config_text);
-                  }}
-                  className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-xs text-text-secondary hover:text-accent transition-colors"
-                >
-                  <Copy className="h-3 w-3" /> 复制
-                </button>
-                <button
-                  onClick={() => sendToDiff(historyDetail.config_text, 'old')}
-                  className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-xs text-text-secondary hover:text-accent transition-colors"
-                >
-                  <ArrowRightLeft className="h-3 w-3" /> 作为旧版本
-                </button>
-                <button
-                  onClick={() => sendToDiff(historyDetail.config_text, 'new')}
-                  className="flex items-center gap-1 rounded border border-white/10 px-2 py-1 text-xs text-text-secondary hover:text-accent transition-colors"
-                >
-                  <ArrowRightLeft className="h-3 w-3" /> 作为新版本
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="divide-y divide-white/5">
-              {history.length === 0 && (
-                <p className="px-4 py-8 text-center text-xs text-text-muted">暂无历史记录</p>
-              )}
-              {history.map((entry) => (
-                <button
-                  key={entry.id}
-                  onClick={() => loadHistoryDetail(entry)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
-                >
-                  <FileCode className="h-4 w-4 text-text-muted shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-text-primary truncate">
-                      {DEVICE_NAME_MAP[entry.device_type] || entry.device_type}
-                    </p>
-                    <p className="text-xs text-text-muted">
-                      {new Date(entry.created_at).toLocaleString()}
-                    </p>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {history.length === 0 && (
+                  <p className="px-4 py-8 text-center text-xs text-text-muted">暂无历史记录</p>
+                )}
+                {history.map((entry) => (
+                  <div key={entry.id} className="flex items-stretch">
+                    <button
+                      onClick={() => loadHistoryDetail(entry)}
+                      className="flex flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                    >
+                      <FileCode className="h-4 w-4 text-text-muted shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-text-primary truncate">
+                            {DEVICE_NAME_MAP[entry.device_type] || entry.device_type}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-text-muted">
+                          <span>{new Date(entry.created_at).toLocaleString()}</span>
+                          {entry.note && (
+                            <span className="truncate text-accent/70">· {entry.note}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Eye className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRestore(entry);
+                      }}
+                      className="px-2 text-text-muted hover:text-accent hover:bg-accent/5 transition-colors"
+                      title="恢复到当前设备"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <Eye className="h-3.5 w-3.5 text-text-muted" />
-                </button>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Template Preview Modal */}
+      {templatePreview !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setTemplatePreview(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[70vh] rounded-lg border border-white/10 bg-background shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-accent" />
+                <h3 className="text-sm font-semibold text-text-primary">模板预览</h3>
+              </div>
+              <button
+                onClick={() => setTemplatePreview(null)}
+                className="rounded p-1 text-text-muted hover:text-text-primary transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-          )}
+            <pre className="p-4 text-sm font-mono text-text-primary overflow-auto max-h-[60vh] whitespace-pre-wrap">
+              {templatePreview}
+            </pre>
+          </div>
         </div>
       )}
     </div>

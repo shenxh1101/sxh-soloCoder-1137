@@ -1,0 +1,17 @@
+{
+  "id": "9cd13fb2-d07b-4f54-84da-052a32e28c14",
+  "device_type": "linux_server",
+  "config_text": "hostnamectl set-hostname web01",
+  "config_blocks": [
+    {
+      "type": "hostname",
+      "id": "1",
+      "properties": {
+        "hostname": "web01"
+      }
+    }
+  ],
+  "created_at": "2026-06-11T01:39:30.604680+00:00",
+  "version": 1,
+  "note": "Production web server v1"
+}

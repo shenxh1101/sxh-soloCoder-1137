@@ -35,6 +35,8 @@ class GenerateRequestModel(BaseModel):
 
 class ZipRequestModel(BaseModel):
     devices: List[GenerateRequestModel]
+    labels: Optional[List[str]] = None
+    filenames: Optional[List[str]] = None
 
 
 class DiffRequestModel(BaseModel):
@@ -114,6 +116,7 @@ def generate_config():
         'config_blocks': blocks,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'version': 1,
+        'note': '',
     }
     os.makedirs(HISTORY_DIR, exist_ok=True)
     with open(os.path.join(HISTORY_DIR, f'{history_id}.json'), 'w', encoding='utf-8') as f:
@@ -125,6 +128,13 @@ def generate_config():
         'warnings': [w.__dict__ for w in warnings],
         'history_id': history_id,
         'template_used': data.template_id or 'default',
+        'history_entry': {
+            'id': history_entry['id'],
+            'device_type': history_entry['device_type'],
+            'created_at': history_entry['created_at'],
+            'version': history_entry['version'],
+            'note': history_entry['note'],
+        },
     })
 
 
@@ -138,12 +148,20 @@ def generate_zip():
     import io
     import zipfile
 
+    labels = data.labels or []
+    filenames = data.filenames or []
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
         for i, device in enumerate(data.devices):
             blocks = [b.model_dump() for b in device.config_blocks]
             config_text = generator.generate(device.device_type, blocks, device.template_id)
-            filename = f'{device.device_type}_{i+1}.txt'
+            if i < len(filenames) and filenames[i]:
+                filename = filenames[i]
+            elif i < len(labels) and labels[i]:
+                filename = f'{labels[i]}_{device.device_type}.txt'
+            else:
+                filename = f'{device.device_type}_{i+1}.txt'
             zf.writestr(filename, config_text)
 
     buf.seek(0)
@@ -183,18 +201,22 @@ def validate_config():
 
 @api.route('/history', methods=['GET'])
 def get_history():
+    device_filter = request.args.get('device_type', '')
     history = []
     if os.path.exists(HISTORY_DIR):
         for filename in os.listdir(HISTORY_DIR):
             if filename.endswith('.json'):
                 with open(os.path.join(HISTORY_DIR, filename), 'r', encoding='utf-8') as f:
                     entry = json.load(f)
-                    history.append({
-                        'id': entry['id'],
-                        'device_type': entry['device_type'],
-                        'created_at': entry['created_at'],
-                        'version': entry.get('version', 1),
-                    })
+                if device_filter and entry.get('device_type', '') != device_filter:
+                    continue
+                history.append({
+                    'id': entry['id'],
+                    'device_type': entry['device_type'],
+                    'created_at': entry['created_at'],
+                    'version': entry.get('version', 1),
+                    'note': entry.get('note', ''),
+                })
     history.sort(key=lambda x: x['created_at'], reverse=True)
     return jsonify({'history': history})
 
@@ -205,4 +227,23 @@ def get_history_entry(history_id):
     if not os.path.exists(filepath):
         return jsonify({'error': 'History entry not found'}), 404
     with open(filepath, 'r', encoding='utf-8') as f:
-        return jsonify(json.load(f))
+        entry = json.load(f)
+    return jsonify({
+        **entry,
+        'note': entry.get('note', ''),
+    })
+
+
+@api.route('/history/<history_id>', methods=['PATCH'])
+def update_history_entry(history_id):
+    filepath = os.path.join(HISTORY_DIR, f'{history_id}.json')
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'History entry not found'}), 404
+    data = request.get_json() or {}
+    with open(filepath, 'r', encoding='utf-8') as f:
+        entry = json.load(f)
+    if 'note' in data:
+        entry['note'] = data['note']
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(entry, f, ensure_ascii=False, indent=2)
+    return jsonify({'message': 'Updated', 'note': entry.get('note', '')})

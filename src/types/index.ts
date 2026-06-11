@@ -22,6 +22,7 @@ export interface GenerateResponse {
   warnings: ValidationWarning[];
   history_id: string;
   template_used: string;
+  history_entry: HistoryEntry;
 }
 
 export interface DiffLine {
@@ -52,6 +53,7 @@ export interface HistoryEntry {
   device_type: string;
   created_at: string;
   version: number;
+  note: string;
 }
 
 export interface FullHistoryEntry extends HistoryEntry {

@@ -1,0 +1,33 @@
+{%- if hostname %}
+hostnamectl set-hostname {{ hostname }}
+{% endif -%}
+{% for iface in interfaces %}
+cat <<EOF > /etc/network/interfaces.d/{{ iface.name }}
+auto {{ iface.name }}
+iface {{ iface.name }} inet static
+    address {{ iface.ip_address }}
+{%- if iface.description %}
+    # {{ iface.description }}
+{% endif -%}
+{%- if iface.gateway %}
+    gateway {{ iface.gateway }}
+{% endif -%}
+EOF
+{% endfor -%}
+{% for route in static_routes %}
+ip route add {{ route.destination }}/{{ route.subnet_mask }} via {{ route.next_hop }} dev {{ route.interface }}
+{% endfor -%}
+{% for dns in dns_servers %}
+echo "nameserver {{ dns.server }}" >> /etc/resolv.conf
+{% endfor -%}
+{% for acl in acls %}
+iptables -A {{ acl.chain or 'INPUT' }} -s {{ acl.source }} -j {{ acl.action.upper() }}
+{% endfor -%}
+{% for ntp in ntp_servers %}
+timedatectl set-ntp true
+echo "server {{ ntp.server }} iburst" >> /etc/ntp.conf
+{% endfor -%}
+{% if snmp %}
+apt-get install -y snmpd
+echo "rocommunity {{ snmp.community }}" >> /etc/snmp/snmpd.conf
+{% endif -%}

@@ -1,0 +1,22 @@
+{%- if hostname %}
+hostname
+{{ hostname }}
+{% endif -%}
+{% for iface in interfaces %}
+netsh interface ip set address name="{{ iface.name }}" source=static addr={{ iface.ip_address }}
+{%- if iface.gateway %}
+netsh interface ip set address name="{{ iface.name }}" gateway={{ iface.gateway }}
+{% endif -%}
+{% endfor -%}
+{% for route in static_routes %}
+route add {{ route.destination }} mask {{ route.subnet_mask }} {{ route.next_hop }}
+{% endfor -%}
+{% for dns in dns_servers %}
+netsh interface ip add dns name="Ethernet" addr={{ dns.server }}
+{% endfor -%}
+{% for acl in acls %}
+netsh advfirewall firewall add rule name="{{ acl.name or 'Rule' }}" dir={{ acl.direction or 'in' }} action={{ acl.action }} protocol={{ acl.protocol or 'any' }} remoteip={{ acl.source }}
+{% endfor -%}
+{% for ntp in ntp_servers %}
+w32tm /config /manualpeerlist:{{ ntp.server }} /syncfromflags:manual /reliable:yes /update
+{% endfor -%}

@@ -1,0 +1,58 @@
+{
+  "id": "8a1f5a50-c8fe-4dd3-9acf-e9c6c21cfed5",
+  "device_type": "cisco_router",
+  "config_text": "hostname Core-Router-01\nvlan 10\n name Management\ninterface GigabitEthernet0/1 description Uplink to Core\n ip address 10.0.0.1/24\n no shutdown\ninterface GigabitEthernet0/2 ip address 192.168.1.1/24\n switchport access vlan 10\n no shutdown\nip route 192.168.1.0 255.255.255.0 10.0.0.254\nntp server pool.ntp.org",
+  "config_blocks": [
+    {
+      "type": "hostname",
+      "id": "1",
+      "properties": {
+        "hostname": "Core-Router-01"
+      }
+    },
+    {
+      "type": "interface",
+      "id": "2",
+      "properties": {
+        "name": "GigabitEthernet0/1",
+        "ip_address": "10.0.0.1/24",
+        "description": "Uplink to Core"
+      }
+    },
+    {
+      "type": "vlan",
+      "id": "3",
+      "properties": {
+        "vlan_id": "10",
+        "name": "Management"
+      }
+    },
+    {
+      "type": "interface",
+      "id": "4",
+      "properties": {
+        "name": "GigabitEthernet0/2",
+        "ip_address": "192.168.1.1/24",
+        "vlan_id": "10"
+      }
+    },
+    {
+      "type": "static_route",
+      "id": "5",
+      "properties": {
+        "destination": "192.168.1.0",
+        "subnet_mask": "255.255.255.0",
+        "next_hop": "10.0.0.254"
+      }
+    },
+    {
+      "type": "ntp",
+      "id": "6",
+      "properties": {
+        "server": "pool.ntp.org"
+      }
+    }
+  ],
+  "created_at": "2026-06-11T01:11:26.506701+00:00",
+  "version": 1
+}

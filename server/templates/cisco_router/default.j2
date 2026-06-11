@@ -1,0 +1,61 @@
+{%- if hostname %}
+hostname {{ hostname }}
+{% endif -%}
+{%- for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+ name {{ vlan.name }}
+{% endfor -%}
+{% for iface in interfaces %}
+interface {{ iface.name }}
+{%- if iface.description %}
+ description {{ iface.description }}
+{% endif -%}
+{%- if iface.ip_address %}
+ ip address {{ iface.ip_address }}
+{% endif -%}
+{%- if iface.vlan_id %}
+ switchport access vlan {{ iface.vlan_id }}
+{% endif -%}
+{%- if iface.enabled == false %}
+ shutdown
+{% else %}
+ no shutdown
+{% endif -%}
+{% endfor -%}
+{% for route in static_routes %}
+ip route {{ route.destination }} {{ route.subnet_mask }} {{ route.next_hop or route.interface }}
+{% endfor -%}
+{% if ospf %}
+router ospf {{ ospf.process_id or 1 }}
+{%- for net in ospf.networks %}
+ network {{ net }} area {{ ospf.area or 0 }}
+{% endfor -%}
+{% endif -%}
+{% if bgp %}
+router bgp {{ bgp.as_number }}
+{%- for net in bgp.networks %}
+ network {{ net }}
+{% endfor -%}
+{%- for neighbor in bgp.neighbors %}
+ neighbor {{ neighbor.ip }} remote-as {{ neighbor.remote_as }}
+{% endfor -%}
+{% endif -%}
+{% for acl in acls %}
+{%- if acl.type == 'standard' %}
+access-list {{ acl.number }} {{ acl.action }} {{ acl.source }}
+{% elif acl.type == 'extended' %}
+access-list {{ acl.number }} {{ acl.action }} {{ acl.protocol }} {{ acl.source }} {{ acl.destination }}
+{% endif -%}
+{% endfor -%}
+{% for pool in dhcp_pools %}
+ip dhcp pool {{ pool.name }}
+ network {{ pool.network }} {{ pool.subnet_mask }}
+ default-router {{ pool.default_router }}
+ dns-server {{ pool.dns_server }}
+{% endfor -%}
+{% if snmp %}
+snmp-server community {{ snmp.community }} {{ snmp.access or 'RO' }}
+{% endif -%}
+{% for ntp in ntp_servers %}
+ntp server {{ ntp.server }}
+{% endfor -%}

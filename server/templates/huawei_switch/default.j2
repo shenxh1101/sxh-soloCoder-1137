@@ -1,0 +1,51 @@
+{%- if hostname %}
+sysname {{ hostname }}
+{% endif -%}
+{%- for vlan in vlans %}
+vlan {{ vlan.vlan_id }}
+ description {{ vlan.name }}
+{% endfor -%}
+{% for iface in interfaces %}
+interface {{ iface.name }}
+{%- if iface.description %}
+ description {{ iface.description }}
+{% endif -%}
+{%- if iface.ip_address %}
+ ip address {{ iface.ip_address }}
+{% endif -%}
+{%- if iface.vlan_id %}
+ port link-type access
+ port default vlan {{ iface.vlan_id }}
+{% endif -%}
+{%- if iface.enabled == false %}
+ shutdown
+{% else %}
+ undo shutdown
+{% endif -%}
+{% endfor -%}
+{% for route in static_routes %}
+ip route-static {{ route.destination }} {{ route.subnet_mask }} {{ route.next_hop or route.interface }}
+{% endfor -%}
+{% if ospf %}
+ospf {{ ospf.process_id or 1 }}
+ area {{ ospf.area or 0 }}
+{%- for net in ospf.networks %}
+  network {{ net }}
+{% endfor -%}
+{% endif -%}
+{% for acl in acls %}
+acl number {{ acl.number }}
+ rule {{ acl.rule_id or 5 }} {{ acl.action }} {{ acl.protocol or 'ip' }} source {{ acl.source }}
+{% endfor -%}
+{% for pool in dhcp_pools %}
+dhcp server ip-pool {{ pool.name }}
+ network {{ pool.network }} mask {{ pool.subnet_mask }}
+ gateway-list {{ pool.default_router }}
+ dns-list {{ pool.dns_server }}
+{% endfor -%}
+{% if snmp %}
+snmp-agent community {{ snmp.access or 'read' }} {{ snmp.community }}
+{% endif -%}
+{% for ntp in ntp_servers %}
+ntp-service unicast-server {{ ntp.server }}
+{% endfor -%}

@@ -21,6 +21,11 @@ import {
   Filter,
   Check,
   FileText,
+  Trash2,
+  Tag,
+  Search,
+  Square,
+  CheckSquare,
 } from 'lucide-react';
 
 const DEVICE_NAME_MAP: Record<string, string> = {
@@ -41,7 +46,11 @@ export default function Home() {
     loadTemplates,
     loadHistory,
     loadHistoryWithFilter,
+    loadHistoryWithSearch,
     updateHistoryNote,
+    updateHistoryTag,
+    deleteHistoryEntry,
+    batchDeleteHistory,
     restoreFromHistory,
     addSession,
     removeSession,
@@ -54,8 +63,14 @@ export default function Home() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyDetail, setHistoryDetail] = useState<FullHistoryEntry | null>(null);
   const [historyFilter, setHistoryFilter] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteValue, setNoteValue] = useState('');
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [tagValue, setTagValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [templatePreview, setTemplatePreview] = useState<string | null>(null);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
@@ -70,7 +85,27 @@ export default function Home() {
   const openHistory = useCallback(() => {
     loadHistory();
     setHistoryOpen(true);
+    setSelectedIds(new Set());
   }, [loadHistory]);
+
+  const doSearch = useCallback(() => {
+    loadHistoryWithSearch({
+      deviceType: historyFilter || undefined,
+      keyword: keyword || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    });
+  }, [loadHistoryWithSearch, historyFilter, keyword, dateFrom, dateTo]);
+
+  const handleFilterChange = (dt: string) => {
+    setHistoryFilter(dt);
+    loadHistoryWithSearch({
+      deviceType: dt || undefined,
+      keyword: keyword || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+    });
+  };
 
   const handleLabelEdit = (sId: string, label: string) => {
     setEditingLabel(sId);
@@ -82,11 +117,6 @@ export default function Home() {
       renameSession(editingLabel, editValue.trim());
     }
     setEditingLabel(null);
-  };
-
-  const handleFilterChange = (dt: string) => {
-    setHistoryFilter(dt);
-    loadHistoryWithFilter(dt || undefined);
   };
 
   const loadHistoryDetail = async (entry: HistoryEntry) => {
@@ -114,8 +144,57 @@ export default function Home() {
   const handleNoteSave = async () => {
     if (editingNote) {
       await updateHistoryNote(editingNote, noteValue);
+      if (historyDetail && historyDetail.id === editingNote) {
+        setHistoryDetail({ ...historyDetail, note: noteValue });
+      }
     }
     setEditingNote(null);
+  };
+
+  const handleTagEdit = (id: string, currentTag: string) => {
+    setEditingTag(id);
+    setTagValue(currentTag);
+  };
+
+  const handleTagSave = async () => {
+    if (editingTag) {
+      await updateHistoryTag(editingTag, tagValue);
+      if (historyDetail && historyDetail.id === editingTag) {
+        setHistoryDetail({ ...historyDetail, tag: tagValue });
+      }
+    }
+    setEditingTag(null);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteHistoryEntry(id);
+    if (historyDetail?.id === id) {
+      setHistoryDetail(null);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === history.length && history.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(history.map((h) => h.id)));
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    await batchDeleteHistory([...selectedIds]);
+    setSelectedIds(new Set());
+    setHistoryDetail(null);
   };
 
   const sendToDiff = (text: string, side: 'old' | 'new') => {
@@ -307,27 +386,75 @@ export default function Home() {
                 onClick={() => {
                   setHistoryOpen(false);
                   setHistoryDetail(null);
+                  setSelectedIds(new Set());
                 }}
                 className="rounded p-1 text-text-muted hover:text-text-primary transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
+
             {!historyDetail && (
-              <div className="flex items-center gap-2">
-                <Filter className="h-3.5 w-3.5 text-text-muted" />
-                <select
-                  value={historyFilter}
-                  onChange={(e) => handleFilterChange(e.target.value)}
-                  className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
-                >
-                  <option value="">全部设备类型</option>
-                  <option value="cisco_router">Cisco 路由器</option>
-                  <option value="huawei_switch">华为交换机</option>
-                  <option value="linux_server">Linux 服务器</option>
-                  <option value="windows_firewall">Windows 防火墙</option>
-                </select>
-              </div>
+              <>
+                <div className="flex items-center gap-2">
+                  <Filter className="h-3.5 w-3.5 text-text-muted" />
+                  <select
+                    value={historyFilter}
+                    onChange={(e) => handleFilterChange(e.target.value)}
+                    className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                  >
+                    <option value="">全部设备类型</option>
+                    <option value="cisco_router">Cisco 路由器</option>
+                    <option value="huawei_switch">华为交换机</option>
+                    <option value="linux_server">Linux 服务器</option>
+                    <option value="windows_firewall">Windows 防火墙</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Search className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                  <input
+                    type="text"
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && doSearch()}
+                    placeholder="搜索备注/标签..."
+                    className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                  />
+                  <span className="text-xs text-text-muted">至</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="flex-1 rounded border border-white/10 bg-surface px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
+                  />
+                  <button
+                    onClick={doSearch}
+                    className="rounded border border-accent/30 bg-accent/10 px-2 py-1 text-xs text-accent hover:bg-accent/20"
+                  >
+                    搜索
+                  </button>
+                </div>
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-text-muted">已选 {selectedIds.size} 项</span>
+                    <button
+                      onClick={handleBatchDelete}
+                      className="rounded bg-red-500/10 px-2 py-1 text-xs text-red-400 hover:bg-red-500/20"
+                    >
+                      <Trash2 className="inline h-3 w-3 mr-1" />
+                      批量删除
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -345,6 +472,47 @@ export default function Home() {
                     {DEVICE_NAME_MAP[historyDetail.device_type] || historyDetail.device_type}
                   </span>
                   <span>{new Date(historyDetail.created_at).toLocaleString()}</span>
+                  {historyDetail.tag && (
+                    <span className="rounded bg-accent/10 px-1.5 py-0.5 text-accent">
+                      {historyDetail.tag}
+                    </span>
+                  )}
+                </div>
+
+                {/* Tag editor */}
+                <div className="rounded border border-white/10 bg-surface p-2">
+                  <label className="text-xs text-text-muted">版本标签</label>
+                  {editingTag === historyDetail.id ? (
+                    <div className="flex gap-1 mt-1">
+                      <input
+                        value={tagValue}
+                        onChange={(e) => setTagValue(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleTagSave()}
+                        onBlur={handleTagSave}
+                        autoFocus
+                        className="flex-1 rounded border border-accent bg-background px-2 py-1 text-xs text-text-primary focus:outline-none"
+                      />
+                      <button
+                        onClick={handleTagSave}
+                        className="rounded bg-accent/20 p-1 text-accent"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Tag className="h-3 w-3 text-text-muted" />
+                      <span className="flex-1 text-xs text-text-secondary">
+                        {historyDetail.tag || '点击设置标签...'}
+                      </span>
+                      <button
+                        onClick={() => handleTagEdit(historyDetail.id, historyDetail.tag || '')}
+                        className="text-text-muted hover:text-accent"
+                      >
+                        <PenLine className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Note editor */}
@@ -356,6 +524,7 @@ export default function Home() {
                         value={noteValue}
                         onChange={(e) => setNoteValue(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleNoteSave()}
+                        onBlur={handleNoteSave}
                         autoFocus
                         className="flex-1 rounded border border-accent bg-background px-2 py-1 text-xs text-text-primary focus:outline-none"
                       />
@@ -412,6 +581,12 @@ export default function Home() {
                   >
                     <ArrowRightLeft className="h-3 w-3" /> 作为新版本
                   </button>
+                  <button
+                    onClick={() => handleDelete(historyDetail.id)}
+                    className="flex items-center gap-1 rounded border border-red-500/20 px-2 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" /> 删除
+                  </button>
                 </div>
               </div>
             ) : (
@@ -419,18 +594,46 @@ export default function Home() {
                 {history.length === 0 && (
                   <p className="px-4 py-8 text-center text-xs text-text-muted">暂无历史记录</p>
                 )}
+                <div className="flex items-center gap-1 px-4 py-2 border-b border-white/5">
+                  <button
+                    onClick={selectAll}
+                    className="text-text-muted hover:text-accent transition-colors"
+                  >
+                    {selectedIds.size === history.length && history.length > 0 ? (
+                      <CheckSquare className="h-4 w-4" />
+                    ) : (
+                      <Square className="h-4 w-4" />
+                    )}
+                  </button>
+                  <span className="text-xs text-text-muted">全选</span>
+                </div>
                 {history.map((entry) => (
                   <div key={entry.id} className="flex items-stretch">
                     <button
+                      onClick={() => toggleSelect(entry.id)}
+                      className="px-2 text-text-muted hover:text-accent transition-colors shrink-0"
+                    >
+                      {selectedIds.has(entry.id) ? (
+                        <CheckSquare className="h-3.5 w-3.5" />
+                      ) : (
+                        <Square className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
                       onClick={() => loadHistoryDetail(entry)}
-                      className="flex flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors"
+                      className="flex flex-1 items-center gap-3 py-3 pr-4 text-left hover:bg-white/5 transition-colors min-w-0"
                     >
                       <FileCode className="h-4 w-4 text-text-muted shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <p className="text-sm text-text-primary truncate">
                             {DEVICE_NAME_MAP[entry.device_type] || entry.device_type}
                           </p>
+                          {entry.tag && (
+                            <span className="text-xs rounded bg-accent/10 px-1 text-accent truncate">
+                              {entry.tag}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-text-muted">
                           <span>{new Date(entry.created_at).toLocaleString()}</span>
@@ -446,10 +649,20 @@ export default function Home() {
                         e.stopPropagation();
                         handleRestore(entry);
                       }}
-                      className="px-2 text-text-muted hover:text-accent hover:bg-accent/5 transition-colors"
+                      className="px-2 text-text-muted hover:text-accent hover:bg-accent/5 transition-colors shrink-0"
                       title="恢复到当前设备"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(entry.id);
+                      }}
+                      className="px-2 text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors shrink-0"
+                      title="删除"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ))}

@@ -54,11 +54,29 @@ export interface HistoryEntry {
   created_at: string;
   version: number;
   note: string;
+  tag: string;
 }
 
 export interface FullHistoryEntry extends HistoryEntry {
   config_text: string;
   config_blocks: ConfigBlock[];
+}
+
+export interface ZipFilePreview {
+  filename: string;
+  label: string;
+  device_type: string;
+  config_blocks_count: number;
+  warnings_count: number;
+  valid: boolean;
+  is_manifest?: boolean;
+}
+
+export interface TemplateTestResult {
+  success: boolean;
+  config_text?: string;
+  error?: string;
+  warnings: ValidationWarning[];
 }
 
 export interface DeviceSession {

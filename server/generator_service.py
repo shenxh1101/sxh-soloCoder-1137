@@ -1,6 +1,6 @@
 import os
-from jinja2 import Environment, FileSystemLoader, BaseLoader, TemplateNotFound
-from typing import List, Dict, Any, Optional
+from jinja2 import Environment, FileSystemLoader, BaseLoader, TemplateNotFound, TemplateSyntaxError, UndefinedError
+from typing import List, Dict, Any, Optional, Tuple
 
 
 class GeneratorService:
@@ -14,6 +14,16 @@ class GeneratorService:
         device_type: str,
         config_blocks: List[Dict[str, Any]],
         template_id: Optional[str] = None,
+    ) -> str:
+        template = self._load_template(device_type, template_id)
+        context = self._build_context(device_type, config_blocks)
+        return template.render(**context).strip()
+
+    def test_template(
+        self,
+        template_id: str,
+        device_type: str,
+        config_blocks: List[Dict[str, Any]],
     ) -> str:
         template = self._load_template(device_type, template_id)
         context = self._build_context(device_type, config_blocks)

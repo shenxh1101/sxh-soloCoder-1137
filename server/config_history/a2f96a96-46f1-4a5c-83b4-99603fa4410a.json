@@ -1,0 +1,26 @@
+{
+  "id": "a2f96a96-46f1-4a5c-83b4-99603fa4410a",
+  "device_type": "cisco_router",
+  "config_text": "hostname TEST-API\ninterface GigabitEthernet0/0 no shutdown",
+  "config_blocks": [
+    {
+      "type": "hostname",
+      "id": "h1",
+      "properties": {
+        "hostname": "TEST-API"
+      }
+    },
+    {
+      "type": "interface",
+      "id": "i1",
+      "properties": {
+        "ip": "10.0.0.1",
+        "name": "GigabitEthernet0/0"
+      }
+    }
+  ],
+  "created_at": "2026-06-11T02:05:28.798159+00:00",
+  "version": 1,
+  "note": "API test note",
+  "tag": "v1.0"
+}

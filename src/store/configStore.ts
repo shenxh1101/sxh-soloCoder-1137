@@ -7,6 +7,8 @@ import type {
   DeviceSession,
   HistoryEntry,
   FullHistoryEntry,
+  TemplateTestResult,
+  ZipFilePreview,
 } from '@/types';
 
 const API_BASE = '/api';
@@ -46,6 +48,15 @@ async function apiPatch<T>(url: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function apiDelete<T>(url: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Request failed' }));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.json();
+}
+
 const dsid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 function defaultSession(label: string): DeviceSession {
@@ -74,8 +85,14 @@ interface ConfigState {
   loadTemplates: () => Promise<void>;
   loadHistory: () => Promise<void>;
   loadHistoryWithFilter: (deviceType?: string) => Promise<void>;
+  loadHistoryWithSearch: (params: { deviceType?: string; keyword?: string; dateFrom?: string; dateTo?: string }) => Promise<void>;
   updateHistoryNote: (id: string, note: string) => Promise<void>;
+  updateHistoryTag: (id: string, tag: string) => Promise<void>;
+  deleteHistoryEntry: (id: string) => Promise<void>;
+  batchDeleteHistory: (ids: string[]) => Promise<void>;
   restoreFromHistory: (hid: string, sid: string) => Promise<void>;
+  testTemplate: (templateId: string, deviceType: string, blocks: ConfigBlock[]) => Promise<TemplateTestResult>;
+  previewZip: (sids: string[], includeManifest: boolean) => Promise<ZipFilePreview[]>;
 
   addSession: () => void;
   removeSession: (sid: string) => void;
@@ -156,13 +173,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
   },
 
   updateHistoryNote: async (id, note) => {
+    const prev = get().history;
+    set((s) => ({
+      history: s.history.map((h) => (h.id === id ? { ...h, note } : h)),
+    }));
     try {
       await apiPatch(`/history/${id}`, { note });
-      set((s) => ({
-        history: s.history.map((h) => (h.id === id ? { ...h, note } : h)),
-      }));
     } catch {
-      // ignore
+      set({ history: prev });
     }
   },
 
@@ -188,6 +206,79 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       }));
     } catch {
       // ignore
+    }
+  },
+
+  testTemplate: async (templateId, deviceType, blocks) => {
+    const result = await apiPost<TemplateTestResult>(`/templates/${templateId}/test`, {
+      device_type: deviceType,
+      config_blocks: blocks,
+    });
+    return result;
+  },
+
+  previewZip: async (sids, includeManifest) => {
+    const sessions = get().sessions.filter((s) => sids.includes(s.id));
+    const result = await apiPost<{ files: ZipFilePreview[] }>('/generate/preview-zip', {
+      devices: sessions.map((s) => ({
+        device_type: s.deviceType,
+        template_id: s.templateId,
+        config_blocks: s.configBlocks,
+      })),
+      labels: sessions.map((s) => s.label),
+      include_manifest: includeManifest,
+    });
+    return result.files;
+  },
+
+  loadHistoryWithSearch: async (params) => {
+    const parts: string[] = [];
+    if (params.deviceType) parts.push(`device_type=${encodeURIComponent(params.deviceType)}`);
+    if (params.keyword) parts.push(`keyword=${encodeURIComponent(params.keyword)}`);
+    if (params.dateFrom) parts.push(`date_from=${encodeURIComponent(params.dateFrom)}`);
+    if (params.dateTo) parts.push(`date_to=${encodeURIComponent(params.dateTo)}`);
+    const qs = parts.length > 0 ? `?${parts.join('&')}` : '';
+    try {
+      const data = await apiGet<{ history: HistoryEntry[] }>(`/history${qs}`);
+      set({ history: data.history });
+    } catch {
+      // ignore
+    }
+  },
+
+  updateHistoryTag: async (id, tag) => {
+    const prev = get().history;
+    set((s) => ({
+      history: s.history.map((h) => (h.id === id ? { ...h, tag } : h)),
+    }));
+    try {
+      await apiPatch(`/history/${id}`, { tag });
+    } catch {
+      set({ history: prev });
+    }
+  },
+
+  deleteHistoryEntry: async (id) => {
+    const prev = get().history;
+    set((s) => ({
+      history: s.history.filter((h) => h.id !== id),
+    }));
+    try {
+      await apiDelete(`/history/${id}`);
+    } catch {
+      set({ history: prev });
+    }
+  },
+
+  batchDeleteHistory: async (ids) => {
+    const prev = get().history;
+    set((s) => ({
+      history: s.history.filter((h) => !ids.includes(h.id)),
+    }));
+    try {
+      await apiPost('/history/batch-delete', { ids });
+    } catch {
+      set({ history: prev });
     }
   },
 

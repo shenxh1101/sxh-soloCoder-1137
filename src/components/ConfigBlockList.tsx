@@ -35,12 +35,17 @@ const ICONS: Record<string, typeof Tag> = {
   snmp: Activity,
 };
 
+interface Props {
+  sid: string;
+}
+
 interface BlockCardProps {
   block: ConfigBlock;
   index: number;
+  sid: string;
 }
 
-function BlockCard({ block, index }: BlockCardProps) {
+function BlockCard({ block, index, sid }: BlockCardProps) {
   const { updateBlock, removeBlock, copyBlock } = useConfigStore();
   const [expanded, setExpanded] = useState(true);
   const IconComponent = ICONS[block.type] || Tag;
@@ -61,14 +66,14 @@ function BlockCard({ block, index }: BlockCardProps) {
         <span className="flex-1 text-sm font-medium text-text-primary">{label}</span>
         <span className="text-xs text-text-muted">#{index + 1}</span>
         <button
-          onClick={() => copyBlock(block.id)}
+          onClick={() => copyBlock(sid, block.id)}
           className="shrink-0 rounded p-1 text-text-muted hover:text-accent hover:bg-accent/10 opacity-0 group-hover:opacity-100 transition-all"
           title="复制"
         >
           <Copy className="h-3.5 w-3.5" />
         </button>
         <button
-          onClick={() => removeBlock(block.id)}
+          onClick={() => removeBlock(sid, block.id)}
           className="shrink-0 rounded p-1 text-text-muted hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all"
           title="删除"
         >
@@ -84,7 +89,7 @@ function BlockCard({ block, index }: BlockCardProps) {
               <input
                 type="text"
                 value={String(value)}
-                onChange={(e) => updateBlock(block.id, { [key]: e.target.value })}
+                onChange={(e) => updateBlock(sid, block.id, { [key]: e.target.value })}
                 className="flex-1 rounded border border-white/5 bg-background px-2 py-1 text-xs text-text-primary focus:border-accent focus:outline-none"
               />
             </div>
@@ -95,8 +100,10 @@ function BlockCard({ block, index }: BlockCardProps) {
   );
 }
 
-export default function ConfigBlockList() {
-  const { configBlocks, pasteBlock, clipboard } = useConfigStore();
+export default function ConfigBlockList({ sid }: Props) {
+  const { sessions, pasteBlock, clipboard } = useConfigStore();
+  const session = sessions.find((s) => s.id === sid);
+  const configBlocks = session?.configBlocks || [];
 
   if (configBlocks.length === 0) {
     return (
@@ -115,7 +122,7 @@ export default function ConfigBlockList() {
         </h3>
         {clipboard && (
           <button
-            onClick={pasteBlock}
+            onClick={() => pasteBlock(sid)}
             className="flex items-center gap-1 rounded bg-blue-500/10 px-2 py-1 text-xs text-blue-400 hover:bg-blue-500/20 transition-colors"
           >
             <ClipboardPaste className="h-3.5 w-3.5" />
@@ -126,7 +133,7 @@ export default function ConfigBlockList() {
 
       <div className="space-y-2">
         {configBlocks.map((block, idx) => (
-          <BlockCard key={block.id} block={block} index={idx} />
+          <BlockCard key={block.id} block={block} index={idx} sid={sid} />
         ))}
       </div>
     </div>

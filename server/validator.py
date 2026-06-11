@@ -32,10 +32,17 @@ class DependencyValidator:
                     declared_vlans[vlan_id] = block_id
             elif block_type == 'interface':
                 iface_name = props.get('name', '')
-                ip_addr = props.get('ip_address', '')
-                vlan_id = str(props.get('vlan_id', ''))
                 if iface_name:
                     declared_interfaces[iface_name] = block_id
+
+        for block in config_blocks:
+            block_type = block.get('type', '')
+            props = block.get('properties', {})
+            block_id = block.get('id', '')
+
+            if block_type == 'interface':
+                ip_addr = props.get('ip_address', '')
+                vlan_id = str(props.get('vlan_id', ''))
                 if ip_addr:
                     if ip_addr in assigned_ips:
                         warnings.append(ValidationWarning(
@@ -48,16 +55,10 @@ class DependencyValidator:
                 if vlan_id and vlan_id not in declared_vlans:
                     warnings.append(ValidationWarning(
                         'missing_vlan',
-                        f'接口 {iface_name} 引用了未创建的 VLAN {vlan_id}',
+                        f'接口 {block.get("properties", {}).get("name", "")} 引用了未创建的 VLAN {vlan_id}',
                         block_id,
                     ))
-
-        for block in config_blocks:
-            block_type = block.get('type', '')
-            props = block.get('properties', {})
-            block_id = block.get('id', '')
-
-            if block_type == 'static_route':
+            elif block_type == 'static_route':
                 interface = props.get('interface', '')
                 if interface and interface not in declared_interfaces:
                     warnings.append(ValidationWarning(

@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from typing import List, Dict, Optional
 
@@ -9,6 +10,18 @@ class TemplateService:
         self.template_dir = os.path.join(base_dir, 'templates')
         self.user_template_dir = os.path.join(base_dir, 'user_templates')
         os.makedirs(self.user_template_dir, exist_ok=True)
+
+    def _read_user_template_device_type(self, filename: str) -> str:
+        filepath = os.path.join(self.user_template_dir, filename)
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            match = re.search(r'\{#\s*device_type:\s*(\w+)\s*#\}', content)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return ''
 
     def list_templates(self) -> List[Dict]:
         templates = []
@@ -28,10 +41,11 @@ class TemplateService:
         for filename in os.listdir(self.user_template_dir):
             if filename.endswith('.j2'):
                 template_id = f'user:{filename}'
+                dt = self._read_user_template_device_type(filename)
                 templates.append({
                     'id': template_id,
                     'name': filename,
-                    'device_type': '',
+                    'device_type': dt,
                     'source': 'user',
                 })
 

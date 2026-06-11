@@ -2,34 +2,12 @@ import { useEffect, useRef } from 'react';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-bash';
 import 'prismjs/themes/prism-tomorrow.css';
-import { useConfigStore } from '@/store/configStore';
 
-const CISCO_KEYWORDS =
-  /\b(hostname|interface|ip|address|no|shutdown|switchport|access|vlan|router|ospf|bgp|network|area|route|neighbor|remote-as|snmp-server|community|ntp|dhcp|pool|default-router|dns-server|permit|deny|any|eq|established|log)\b/g;
-
-function highlightCisco(text: string): string {
-  let html = escapeHtml(text);
-  html = html.replace(CISCO_KEYWORDS, '<span class="token keyword">$&</span>');
-  html = html.replace(
-    /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?)/g,
-    '<span class="token number">$&</span>'
-  );
-  html = html.replace(
-    /(GigabitEthernet\d[\d\/\.]*|FastEthernet\d[\d\/\.]*|Loopback\d+|Vlan\d+)/g,
-    '<span class="token string">$&</span>'
-  );
-  return html;
+interface Props {
+  configText: string;
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-export default function ConfigPreview() {
-  const { configText } = useConfigStore();
+export default function ConfigPreview({ configText }: Props) {
   const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -37,7 +15,7 @@ export default function ConfigPreview() {
       try {
         Prism.highlightElement(preRef.current);
       } catch {
-        // fallback to custom highlight
+        // fallback
       }
     }
   }, [configText]);

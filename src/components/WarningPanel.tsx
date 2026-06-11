@@ -1,10 +1,11 @@
-import { useConfigStore } from '@/store/configStore';
 import type { ValidationWarning } from '@/types';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
-export default function WarningPanel() {
-  const { warnings } = useConfigStore();
+interface Props {
+  warnings: ValidationWarning[];
+}
 
+export default function WarningPanel({ warnings }: Props) {
   if (warnings.length === 0) return null;
 
   const byBlock: Record<string, ValidationWarning[]> = {};

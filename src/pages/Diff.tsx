@@ -9,6 +9,15 @@ export default function Diff() {
   const [stats, setStats] = useState({ added: 0, removed: 0, unchanged: 0 });
   const [comparing, setComparing] = useState(false);
 
+  useEffect(() => {
+    const old = sessionStorage.getItem('diff_old');
+    const n = sessionStorage.getItem('diff_new');
+    if (old) setOldConfig(old);
+    if (n) setNewConfig(n);
+    sessionStorage.removeItem('diff_old');
+    sessionStorage.removeItem('diff_new');
+  }, []);
+
   const handleCompare = async () => {
     if (!oldConfig || !newConfig) return;
     setComparing(true);
@@ -34,7 +43,7 @@ export default function Diff() {
       <div>
         <h1 className="text-lg font-bold text-text-primary">版本对比</h1>
         <p className="text-sm text-text-muted mt-1">
-          输入新旧配置文本，对比差异
+          输入新旧配置文本，或从工作台的历史记录导入
         </p>
       </div>
 

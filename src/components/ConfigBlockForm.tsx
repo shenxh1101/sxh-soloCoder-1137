@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useConfigStore } from '@/store/configStore';
 import { BLOCK_TYPE_LABELS, type BlockType, type ConfigBlock } from '@/types';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
 const BLOCK_FIELDS: Record<string, { label: string; key: string; placeholder?: string }[]> = {
   hostname: [{ label: '主机名', key: 'hostname', placeholder: '例如: Core-Router-01' }],
@@ -58,10 +58,17 @@ const BLOCK_FIELDS: Record<string, { label: string; key: string; placeholder?: s
   ],
 };
 
-const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const dsid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-export default function ConfigBlockForm() {
-  const { selectedDevice, addBlock } = useConfigStore();
+interface Props {
+  sid: string;
+}
+
+export default function ConfigBlockForm({ sid }: Props) {
+  const { sessions, addBlock } = useConfigStore();
+  const session = sessions.find((s) => s.id === sid);
+  const selectedDevice = session?.deviceType || '';
+
   const [blockType, setBlockType] = useState<BlockType | ''>('');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
@@ -74,10 +81,10 @@ export default function ConfigBlockForm() {
     if (!blockType) return;
     const block: ConfigBlock = {
       type: blockType,
-      id: generateId(),
+      id: dsid(),
       properties: { ...fields },
     };
-    addBlock(block);
+    addBlock(sid, block);
     setBlockType('');
     setFields({});
     setShowForm(false);

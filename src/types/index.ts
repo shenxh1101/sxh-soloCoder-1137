@@ -54,6 +54,23 @@ export interface HistoryEntry {
   version: number;
 }
 
+export interface FullHistoryEntry extends HistoryEntry {
+  config_text: string;
+  config_blocks: ConfigBlock[];
+}
+
+export interface DeviceSession {
+  id: string;
+  label: string;
+  deviceType: string;
+  configBlocks: ConfigBlock[];
+  configText: string;
+  warnings: ValidationWarning[];
+  templateId: string | null;
+  historyId: string | null;
+  isLoading: boolean;
+}
+
 export type BlockType =
   | 'hostname'
   | 'interface'
